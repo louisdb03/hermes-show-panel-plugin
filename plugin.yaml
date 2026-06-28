@@ -1,0 +1,5 @@
+name: show-panel
+version: "1.0.0"
+description: Display-only Jarvis Panels HUD card tool
+provides_tools:
+  - show_panel
