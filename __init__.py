@@ -358,6 +358,168 @@ def _normalize_payload(args: dict[str, Any]) -> dict[str, Any]:
             "code": code,
         }, panel_id)
 
+    if panel == "message_draft":
+        channel = _text(args.get("channel") or "email", 20)
+        body = _text(args.get("body"), 4000)
+        if not body:
+            raise ValueError("message_draft panel needs body")
+        draft: dict[str, Any] = {
+            "ok": True,
+            "source": "assistant_presentation",
+            "panel": "message_draft",
+            "channel": channel if channel in ("email", "slack") else "email",
+            "body": body,
+        }
+        if channel == "email":
+            subject = _text(args.get("subject"), 200)
+            if subject:
+                draft["subject"] = subject
+            for field in ("to", "cc", "bcc"):
+                recipients = args.get(field)
+                if isinstance(recipients, list):
+                    draft[field] = [_text(r, 200) for r in recipients[:20]]
+        elif channel == "slack":
+            target_type = _text(args.get("target_type") or "channel", 20)
+            target_name = _text(args.get("target_name"), 120)
+            if target_name:
+                draft["target_type"] = target_type if target_type in ("channel", "dm") else "channel"
+                draft["target_name"] = target_name
+        return _with_panel_id(draft, panel_id)
+
+    if panel == "chart":
+        data = args.get("data")
+        series = args.get("series")
+        x_key = _text(args.get("x_key") or args.get("xKey"), 60)
+        if not isinstance(data, list) or not isinstance(series, list) or not x_key:
+            raise ValueError("chart panel needs data, series, and x_key")
+        return _with_panel_id({
+            "ok": True,
+            "source": "assistant_presentation",
+            "panel": "chart",
+            "title": title or "Chart",
+            "description": _text(args.get("description"), 280),
+            "chart_type": _text(args.get("chart_type") or args.get("type") or "bar", 10),
+            "data": data[:50],
+            "x_key": x_key,
+            "series": series[:6],
+            "show_legend": bool(args.get("show_legend")),
+            "show_grid": bool(args.get("show_grid")),
+        }, panel_id)
+
+    if panel == "image":
+        src = _text(args.get("src") or args.get("url"), 500)
+        if not src.startswith(("https://", "http://")):
+            raise ValueError("image panel needs a valid HTTP(S) src")
+        return _with_panel_id({
+            "ok": True,
+            "source": "assistant_presentation",
+            "panel": "image",
+            "url": src,
+            "alt": _text(args.get("alt") or title, 200),
+            "title": title,
+            "description": _text(args.get("description"), 280),
+            "domain": _text(args.get("domain"), 100),
+            "ratio": _text(args.get("ratio") or "auto", 10),
+        }, panel_id)
+
+    if panel == "image_gallery":
+        raw_images = args.get("images")
+        if not isinstance(raw_images, list) or not raw_images:
+            raise ValueError("image_gallery panel needs images")
+        images = []
+        for idx, img in enumerate(raw_images[:6]):
+            if not isinstance(img, dict):
+                continue
+            src = _text(img.get("src") or img.get("url"), 500)
+            if not src.startswith(("https://", "http://")):
+                continue
+            images.append({
+                "id": _text(img.get("id") or str(idx), 80),
+                "src": src,
+                "alt": _text(img.get("alt") or img.get("title") or "", 200),
+                "title": _text(img.get("title") or "", 120),
+                "caption": _text(img.get("caption") or "", 160),
+            })
+        if not images:
+            raise ValueError("image_gallery needs at least one valid image")
+        return _with_panel_id({
+            "ok": True,
+            "source": "assistant_presentation",
+            "panel": "image_gallery",
+            "title": title or "Gallery",
+            "description": _text(args.get("description"), 280),
+            "images": images,
+        }, panel_id)
+
+    if panel == "video":
+        src = _text(args.get("src") or args.get("url"), 500)
+        if not src.startswith(("https://", "http://")):
+            raise ValueError("video panel needs a valid HTTP(S) src")
+        return _with_panel_id({
+            "ok": True,
+            "source": "assistant_presentation",
+            "panel": "video",
+            "url": src,
+            "poster": _text(args.get("poster"), 500),
+            "title": title,
+            "description": _text(args.get("description"), 280),
+            "ratio": _text(args.get("ratio") or "16:9", 10),
+            "duration_ms": args.get("duration_ms") or args.get("durationMs") or 0,
+        }, panel_id)
+
+    if panel == "audio":
+        src = _text(args.get("src") or args.get("url"), 500)
+        if not src.startswith(("https://", "http://")):
+            raise ValueError("audio panel needs a valid HTTP(S) src")
+        return _with_panel_id({
+            "ok": True,
+            "source": "assistant_presentation",
+            "panel": "audio",
+            "url": src,
+            "title": title,
+            "description": _text(args.get("description"), 280),
+            "artwork": _text(args.get("artwork"), 500),
+            "duration_ms": args.get("duration_ms") or args.get("durationMs") or 0,
+        }, panel_id)
+
+    if panel == "order_summary":
+        raw_items = args.get("items")
+        pricing = args.get("pricing")
+        if not isinstance(raw_items, list) or not isinstance(pricing, dict):
+            raise ValueError("order_summary panel needs items and pricing")
+        items = []
+        for idx, item in enumerate(raw_items[:12]):
+            if not isinstance(item, dict):
+                continue
+            name = _text(item.get("name"), 160)
+            if not name:
+                continue
+            items.append({
+                "id": _text(item.get("id") or str(idx), 80),
+                "name": name,
+                "unit_price": item.get("unit_price") or item.get("unitPrice") or 0,
+                "quantity": item.get("quantity") or 1,
+                "description": _text(item.get("description"), 160),
+                "image_url": _text(item.get("image_url") or item.get("imageUrl"), 500),
+            })
+        if not items:
+            raise ValueError("order_summary needs at least one item")
+        return _with_panel_id({
+            "ok": True,
+            "source": "assistant_presentation",
+            "panel": "order_summary",
+            "title": title or "Order Summary",
+            "items": items,
+            "pricing": {
+                "subtotal": pricing.get("subtotal", 0),
+                "total": pricing.get("total", 0),
+                "tax": pricing.get("tax", 0),
+                "shipping": pricing.get("shipping", 0),
+                "discount": pricing.get("discount", 0),
+                "currency": _text(pricing.get("currency") or "USD", 10),
+            },
+        }, panel_id)
+
     raise ValueError("unsupported panel type")
 
 
@@ -383,7 +545,7 @@ SHOW_PANEL_SCHEMA = {
         "properties": {
             "panel": {
                 "type": "string",
-                "enum": ["note", "data_table", "link_preview", "code_block", "item_carousel", "stats"],
+                "enum": ["note", "data_table", "link_preview", "code_block", "item_carousel", "stats", "message_draft", "chart", "image", "image_gallery", "video", "audio", "order_summary"],
                 "description": "Visual card type to render. Omit only when using remove_panel_id.",
             },
             "panel_id": {
@@ -395,7 +557,7 @@ SHOW_PANEL_SCHEMA = {
                 "description": "Remove a persistent presentation panel by ID. When provided, no panel payload is required.",
             },
             "title": {"type": "string", "description": "Short card title."},
-            "body": {"type": "string", "description": "Note card body text."},
+            "body": {"type": "string", "description": "Note card body text or message draft body."},
             "items": {
                 "type": "array",
                 "items": {"anyOf": [{"type": "string"}, {"type": "object"}]},
@@ -427,6 +589,70 @@ SHOW_PANEL_SCHEMA = {
                 "type": "string",
                 "enum": ["info", "success", "warning", "danger"],
                 "description": "Visual tone for note cards.",
+            },
+            "channel": {
+                "type": "string",
+                "enum": ["email", "slack"],
+                "description": "Message channel for message_draft cards.",
+            },
+            "subject": {"type": "string", "description": "Email subject for message_draft."},
+            "to": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Email recipients for message_draft.",
+            },
+            "cc": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "CC recipients for message_draft.",
+            },
+            "bcc": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "BCC recipients for message_draft.",
+            },
+            "target_type": {
+                "type": "string",
+                "enum": ["channel", "dm"],
+                "description": "Slack target type for message_draft.",
+            },
+            "target_name": {"type": "string", "description": "Slack channel/DM name for message_draft."},
+            "chart_type": {
+                "type": "string",
+                "enum": ["bar", "line"],
+                "description": "Chart type for chart cards.",
+            },
+            "x_key": {"type": "string", "description": "Data key for the X axis (chart cards)."},
+            "series": {
+                "type": "array",
+                "items": {"type": "object"},
+                "description": "Chart series: [{key, label, color?}].",
+            },
+            "data": {
+                "type": "array",
+                "items": {"type": "object"},
+                "description": "Chart data rows (objects keyed by series keys + x_key).",
+            },
+            "show_legend": {"type": "boolean", "description": "Show legend on chart cards."},
+            "show_grid": {"type": "boolean", "description": "Show grid lines on chart cards."},
+            "src": {"type": "string", "description": "HTTP(S) source URL for image/video/audio cards."},
+            "alt": {"type": "string", "description": "Alt text for image cards."},
+            "ratio": {
+                "type": "string",
+                "enum": ["auto", "1:1", "4:3", "16:9", "9:16"],
+                "description": "Aspect ratio for image/video cards.",
+            },
+            "poster": {"type": "string", "description": "Poster image URL for video cards."},
+            "artwork": {"type": "string", "description": "Artwork image URL for audio cards."},
+            "duration_ms": {"type": "number", "description": "Duration in milliseconds for video/audio cards."},
+            "images": {
+                "type": "array",
+                "items": {"type": "object"},
+                "description": "Image gallery items: [{id, src, alt, title?, caption?}].",
+            },
+            "pricing": {
+                "type": "object",
+                "description": "Order summary pricing: {subtotal, total, tax?, shipping?, discount?, currency?}.",
             },
         },
     },
