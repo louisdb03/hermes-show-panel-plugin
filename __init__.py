@@ -520,6 +520,33 @@ def _normalize_payload(args: dict[str, Any]) -> dict[str, Any]:
             },
         }, panel_id)
 
+    if panel == "decision":
+        question = _text(args.get("question"), 500)
+        if not question:
+            raise ValueError("decision panel needs a question")
+        raw_choices = args.get("choices")
+        if not isinstance(raw_choices, list):
+            raise ValueError("decision panel needs choices")
+        choices = []
+        for idx, c in enumerate(raw_choices[:4]):
+            if isinstance(c, str):
+                label = c.strip()
+            elif isinstance(c, dict):
+                label = _text(c.get("label") or c.get("text"), 160)
+            else:
+                continue
+            if label:
+                choices.append({"id": str(idx), "label": label})
+        if not choices:
+            raise ValueError("decision panel needs at least one choice")
+        return _with_panel_id({
+            "ok": True,
+            "source": "assistant_presentation",
+            "panel": "decision",
+            "question": question,
+            "choices": choices,
+        }, panel_id)
+
     raise ValueError("unsupported panel type")
 
 
@@ -545,7 +572,7 @@ SHOW_PANEL_SCHEMA = {
         "properties": {
             "panel": {
                 "type": "string",
-                "enum": ["note", "data_table", "link_preview", "code_block", "item_carousel", "stats", "message_draft", "chart", "image", "image_gallery", "video", "audio", "order_summary"],
+                "enum": ["note", "data_table", "link_preview", "code_block", "item_carousel", "stats", "message_draft", "chart", "image", "image_gallery", "video", "audio", "order_summary", "decision"],
                 "description": "Visual card type to render. Omit only when using remove_panel_id.",
             },
             "panel_id": {
